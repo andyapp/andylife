@@ -48,8 +48,7 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
 		Log.d("LayoutTest", "left=" + left + ", top=" + top + ", right="
 				+ right + ", bottom=" + bottom);
-		
-		
+
 		DisplayMetrics displaymetrics = new DisplayMetrics();
 		getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
 		int screen_height = displaymetrics.heightPixels;
@@ -80,9 +79,7 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			break;
 		}
 		case R.id.menuItemReset: {
-			lifeView.pause();
-			lifeView.init();
-			setPreferences();
+			this.resetLifeView();
 			lifeView.resume();
 			break;
 		}
@@ -107,7 +104,8 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		setPreferences();
+		
+		this.resetLifeView();		
 		lifeView.resume();
 	}
 
@@ -125,15 +123,17 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			Log.i("ACTION_DOWN", x + " " + y);
 
 			final Window window = getWindow();
-			final View contentView = window.findViewById(Window.ID_ANDROID_CONTENT);
+			final View contentView = window
+					.findViewById(Window.ID_ANDROID_CONTENT);
 			final float viewTop = contentView.getTop();
 			final float viewLeft = contentView.getLeft();
-			
-			if ((x < viewLeft) || (y < viewTop)){
+
+			if ((x < viewLeft) || (y < viewTop)) {
 				return false;
 			}
-			
-			lifeView.createLife(lifeView.getCellX(x - viewLeft), lifeView.getCellY(y - viewTop));
+
+			lifeView.createLife(lifeView.getCellX(x - viewLeft),
+					lifeView.getCellY(y - viewTop));
 
 			break;
 		}
@@ -143,15 +143,17 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			float y = event.getY();
 
 			final Window window = getWindow();
-			final View contentView = window.findViewById(Window.ID_ANDROID_CONTENT);
+			final View contentView = window
+					.findViewById(Window.ID_ANDROID_CONTENT);
 			final float viewTop = contentView.getTop();
 			final float viewLeft = contentView.getLeft();
-			
-			if ((x < viewLeft) || (y < viewTop)){
+
+			if ((x < viewLeft) || (y < viewTop)) {
 				return false;
-			}			
-			
-			lifeView.createLife(lifeView.getCellX(x - viewLeft), lifeView.getCellY(y - viewTop));
+			}
+
+			lifeView.createLife(lifeView.getCellX(x - viewLeft),
+					lifeView.getCellY(y - viewTop));
 
 			break;
 		}
@@ -160,6 +162,14 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		return true;
 	}
 
+	
+	
+	private void resetLifeView() {
+		lifeView.pause();
+		lifeView.cells = null;
+		setPreferences();		
+	}
+	
 	private void setPreferences() {
 		if (this.lifeView == null) {
 			return;
@@ -169,19 +179,21 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		SharedPreferences preferences = PreferenceManager
 				.getDefaultSharedPreferences(this);
 
-		int cell_size = preferences.getInt("cellSize", 20);
-		
+		String cell_size_str = preferences.getString("cell_size", "");
+		Log.d("cell_size_str", cell_size_str);
+
+		int cell_size = 20;
+		try {
+			cell_size = Integer.parseInt(cell_size_str);
+		} catch (NumberFormatException e) {
+			// todo reset to default
+		}
+
 		lifeView.setCellWidth(cell_size);
 		lifeView.setCellHeight(cell_size);
-		lifeView.setCellCornerRadius(preferences.getInt("cellCornerRadius", 4));
+		lifeView.setCellCornerRadius(preferences.getInt("cellCornerRadius", 5));
 		lifeView.setSleepTime(preferences.getInt("sleepTime", 0));
 	}
-
-	public class CellPattern {
-		int cells[][];
-		int cells_x_count = 5;
-		int cells_y_count = 5;
-	};
 
 	public class CellPrototype {
 		int width;
@@ -193,6 +205,12 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 	public class Cell {
 		int color;
 
+		public final int DEAD_CELL_COLOR = Color.BLACK;
+
+		public Cell() {
+			this.color = DEAD_CELL_COLOR;
+		}
+
 		public Cell(int color) {
 			this.color = color;
 		}
@@ -202,26 +220,26 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		}
 
 		public void kill() {
-			this.color = Color.BLACK;
+			this.color = DEAD_CELL_COLOR;
 		}
 	}
 
 	public class CellArray {
 		Cell cells[][];
-		int xCount;
-		int yCount;
+		int countX;
+		int countY;
 
 		public CellArray(int x_count, int y_count) {
 			if ((x_count <= 0) || (y_count <= 0))
 				return;
 
-			this.xCount = x_count;
-			this.yCount = y_count;
+			this.countX = x_count;
+			this.countY = y_count;
 			cells = new Cell[x_count][y_count];
 
 			for (int x = 0; x < x_count; x++) {
 				for (int y = 0; y < y_count; y++) {
-					cells[x][y] = new Cell(Color.BLACK);
+					cells[x][y] = new Cell();
 				}
 			}
 		}
@@ -269,15 +287,15 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		boolean isSimulating = false;
 		boolean simulateTick = false;
 
+		CellPrototype cellPrototype;
 		CellArray cells[];
 		int cells_now = 0;
 		int cells_next = 1;
 		int cells_x_count = 2;
 		int cells_y_count = 2;
+		int cell_gap = 1;
 
 		int sleepTime = 0;
-
-		CellPrototype cellPrototype;
 
 		FrameCounter frameCounter;
 
@@ -514,7 +532,7 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 
 			if (cells[cells_now].cells[x][y].isAlive()) {
 				paint.setShader(new LinearGradient(0, 0, 0,
-						cellPrototype.height, light_color, dark_color,
+						cellPrototype.height + cell_gap, light_color, dark_color,
 						Shader.TileMode.REPEAT));
 				paint.setARGB(0xFF, 0, 0xFF, 0);
 				canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
@@ -527,17 +545,48 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			}
 		}
 
-		void drawCells(RectF rect, Paint paint) {
-
-			Canvas canvas = holder.lockCanvas();
-
+		void drawCells(Canvas canvas) {
+			Paint paint = new Paint();
+			RectF rect = new RectF(0, 0, cellPrototype.width,
+					cellPrototype.height);
+			
 			for (int x = 0; x < cells_x_count; x++) {
 				for (int y = 0; y < cells_y_count; y++) {
-					rect.offsetTo(x * cellPrototype.width, y
-							* cellPrototype.height);
+					rect.offsetTo(x * (cellPrototype.width + cell_gap), y
+							* (cellPrototype.height + cell_gap));
 					drawCell(canvas, x, y, rect, paint);
 				}
 			}
+
+		}
+
+		void drawStatusText(Canvas canvas) {
+			Paint paint = new Paint();
+
+			paint.setColor(Color.WHITE);
+			paint.setTextSize(18);
+			
+			String text;
+			int text_top = 25;
+			
+			if (isSimulating) {
+				text = "Simulation Running";
+			} else {
+			  text = "Simulation Stopped";
+			}
+			canvas.drawText(text, 10, text_top, paint);
+			text_top += 25;
+			
+			canvas.drawText("FPS: " + frameCounter.getFps(), 10, text_top, paint);
+			text_top += 25;
+		}
+
+		void draw() {
+			Canvas canvas = holder.lockCanvas();
+
+			canvas.drawColor(Color.DKGRAY);
+			drawCells(canvas);
+			drawStatusText(canvas);
 
 			holder.unlockCanvasAndPost(canvas);
 			frameCounter.update();
@@ -552,30 +601,26 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		}
 
 		public void run() {
-
+			
 			if (holder == null) {
 				holder = getHolder();
 			}
 
 			while (!holder.getSurface().isValid()) {
-			}
-
+			}			
+			
 			// calculate number of cells
 			Canvas canvas = holder.lockCanvas();
-			
-			Log.i("CanvasSize", canvas.getWidth() + " " + canvas.getHeight());
-			
-			cells_x_count = canvas.getWidth() / cellPrototype.width;
-			cells_y_count = canvas.getHeight() / cellPrototype.height;
-			holder.unlockCanvasAndPost(canvas);
 
+			Log.i("CanvasSize", canvas.getWidth() + " " + canvas.getHeight());
+
+			cells_x_count = canvas.getWidth() / (cellPrototype.width + cell_gap);
+			cells_y_count = canvas.getHeight() / (cellPrototype.height + cell_gap);
+			holder.unlockCanvasAndPost(canvas);		
+			
 			if (cells == null) {
 				init();
 			}
-
-			Paint paint = new Paint();
-			RectF rect = new RectF(0, 0, cellPrototype.width,
-					cellPrototype.height);
 
 			while (isRunning) {
 				if (!holder.getSurface().isValid()) {
@@ -591,7 +636,7 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 					simulateTick = false;
 				}
 
-				drawCells(rect, paint);
+				this.draw();
 
 				try {
 					Thread.sleep(sleepTime);
