@@ -1,6 +1,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/menu_settings"
-        android:title="@string/menu_settings"
+    <item android:id="@+id/menuItemStart" android:title="@string/Start" android:showAsAction="ifRoom"></item><item android:id="@+id/menuItemStop" android:title="@string/Stop" android:showAsAction="ifRoom"></item><item android:id="@+id/menuItemReset" android:title="@string/Reset"></item><item android:id="@+id/menu_preferences"
+        android:title="@string/Preferences"
         android:orderInCategory="100"
         android:showAsAction="never" />
+    
+    <item android:id="@+id/menuItemNext" android:showAsAction="ifRoom" android:title="@string/Next"></item>
+    
+    
 </menu>

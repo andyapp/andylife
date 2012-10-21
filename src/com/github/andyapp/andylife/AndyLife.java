@@ -2,6 +2,8 @@ package com.github.andyapp.andylife;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
@@ -9,14 +11,21 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
+import android.view.View.OnLayoutChangeListener;
+import android.view.Window;
 import android.widget.Toast;
 import java.util.Random;
 
-public class AndyLife extends Activity {
+public class AndyLife extends Activity implements OnLayoutChangeListener {
 
 	ClassicLifeView lifeView;
 
@@ -25,6 +34,9 @@ public class AndyLife extends Activity {
 		super.onCreate(savedInstanceState);
 
 		lifeView = new ClassicLifeView(this);
+		setPreferences();
+
+		lifeView.addOnLayoutChangeListener(this);
 
 		setContentView(lifeView);
 
@@ -32,9 +44,58 @@ public class AndyLife extends Activity {
 				.show();
 	}
 
+	public void onLayoutChange(View v, int left, int top, int right,
+			int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
+		Log.d("LayoutTest", "left=" + left + ", top=" + top + ", right="
+				+ right + ", bottom=" + bottom);
+		
+		
+		DisplayMetrics displaymetrics = new DisplayMetrics();
+		getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
+		int screen_height = displaymetrics.heightPixels;
+		int screen_width = displaymetrics.widthPixels;
+
+		Log.d("ScreenMetrics", screen_height + " " + screen_width);
+	}
+
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		return false;
+		getMenuInflater().inflate(R.menu.activity_andy_life, menu);
+		return true;
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		switch (item.getItemId()) {
+		case R.id.menuItemStart: {
+			lifeView.setSimulating(true);
+			break;
+		}
+		case R.id.menuItemStop: {
+			lifeView.setSimulating(false);
+			break;
+		}
+		case R.id.menuItemNext: {
+			lifeView.setSimulateTick(true);
+			break;
+		}
+		case R.id.menuItemReset: {
+			lifeView.pause();
+			lifeView.init();
+			setPreferences();
+			lifeView.resume();
+			break;
+		}
+		case R.id.menu_preferences: {
+			Intent intent = new Intent(this, AndyLifePreferences.class);
+			startActivity(intent);
+			break;
+		}
+		default:
+			break;
+		}
+
+		return true;
 	}
 
 	@Override
@@ -46,6 +107,7 @@ public class AndyLife extends Activity {
 	@Override
 	protected void onResume() {
 		super.onResume();
+		setPreferences();
 		lifeView.resume();
 	}
 
@@ -60,7 +122,18 @@ public class AndyLife extends Activity {
 			float x = event.getX();
 			float y = event.getY();
 
-			lifeView.createLife(lifeView.getCellX(x), lifeView.getCellY(y));
+			Log.i("ACTION_DOWN", x + " " + y);
+
+			final Window window = getWindow();
+			final View contentView = window.findViewById(Window.ID_ANDROID_CONTENT);
+			final float viewTop = contentView.getTop();
+			final float viewLeft = contentView.getLeft();
+			
+			if ((x < viewLeft) || (y < viewTop)){
+				return false;
+			}
+			
+			lifeView.createLife(lifeView.getCellX(x - viewLeft), lifeView.getCellY(y - viewTop));
 
 			break;
 		}
@@ -69,7 +142,16 @@ public class AndyLife extends Activity {
 			float x = event.getX();
 			float y = event.getY();
 
-			lifeView.createLife(lifeView.getCellX(x), lifeView.getCellY(y));
+			final Window window = getWindow();
+			final View contentView = window.findViewById(Window.ID_ANDROID_CONTENT);
+			final float viewTop = contentView.getTop();
+			final float viewLeft = contentView.getLeft();
+			
+			if ((x < viewLeft) || (y < viewTop)){
+				return false;
+			}			
+			
+			lifeView.createLife(lifeView.getCellX(x - viewLeft), lifeView.getCellY(y - viewTop));
 
 			break;
 		}
@@ -78,86 +160,241 @@ public class AndyLife extends Activity {
 		return true;
 	}
 
+	private void setPreferences() {
+		if (this.lifeView == null) {
+			return;
+		}
+
+		// get data from settings activity in this case the language
+		SharedPreferences preferences = PreferenceManager
+				.getDefaultSharedPreferences(this);
+
+		int cell_size = preferences.getInt("cellSize", 20);
+		
+		lifeView.setCellWidth(cell_size);
+		lifeView.setCellHeight(cell_size);
+		lifeView.setCellCornerRadius(preferences.getInt("cellCornerRadius", 4));
+		lifeView.setSleepTime(preferences.getInt("sleepTime", 0));
+	}
+
+	public class CellPattern {
+		int cells[][];
+		int cells_x_count = 5;
+		int cells_y_count = 5;
+	};
+
+	public class CellPrototype {
+		int width;
+		int height;
+		int cornerRadius;
+		int color;
+	}
+
+	public class Cell {
+		int color;
+
+		public Cell(int color) {
+			this.color = color;
+		}
+
+		public boolean isAlive() {
+			return this.color != Color.BLACK;
+		}
+
+		public void kill() {
+			this.color = Color.BLACK;
+		}
+	}
+
+	public class CellArray {
+		Cell cells[][];
+		int xCount;
+		int yCount;
+
+		public CellArray(int x_count, int y_count) {
+			if ((x_count <= 0) || (y_count <= 0))
+				return;
+
+			this.xCount = x_count;
+			this.yCount = y_count;
+			cells = new Cell[x_count][y_count];
+
+			for (int x = 0; x < x_count; x++) {
+				for (int y = 0; y < y_count; y++) {
+					cells[x][y] = new Cell(Color.BLACK);
+				}
+			}
+		}
+	}
+
+	public class FrameCounter {
+		private int samplesCollected = 0;
+		private int sampleTime = 0;
+		private int fps = 0;
+		long previousTime = 0;
+
+		void update() {
+			long now = System.currentTimeMillis();
+
+			if (previousTime != 0) {
+				// Time difference between now and last time we were here
+				int time = (int) (now - previousTime);
+				sampleTime += time;
+				samplesCollected++;
+				// After 10 frames
+				if (samplesCollected == 10) {
+
+					// Update the fps variable
+					fps = (int) (10000 / sampleTime);
+					// Log.i("fps:", " " + fps);
+
+					// Reset the sampletime + frames collected
+					sampleTime = 0;
+					samplesCollected = 0;
+				}
+			}
+			previousTime = now;
+		}
+
+		int getFps() {
+			return fps;
+		}
+	}
+
 	public class ClassicLifeView extends SurfaceView implements Runnable {
 
 		Thread thread = null;
 		SurfaceHolder holder;
 		boolean isRunning = false;
+		boolean isSimulating = false;
+		boolean simulateTick = false;
 
-		int cells[][][];
+		CellArray cells[];
 		int cells_now = 0;
 		int cells_next = 1;
+		int cells_x_count = 2;
+		int cells_y_count = 2;
 
-		int cell_width = 20;
-		int cell_height = 20;
-		int cell_corner_radius = 4;
+		int sleepTime = 0;
 
-		int cells_x_size = 2;
-		int cells_y_size = 2;
+		CellPrototype cellPrototype;
 
-		int sleep_time = 0;
+		FrameCounter frameCounter;
 
 		public ClassicLifeView(Context context) {
 			super(context);
+
+			frameCounter = new FrameCounter();
+
+			cellPrototype = new CellPrototype();
+			cellPrototype.color = Color.GREEN;
+			cellPrototype.cornerRadius = 4;
+			cellPrototype.height = 40;
+			cellPrototype.width = 40;
+
 		}
 
 		public int getCellX(float screenX) {
-			return (int) (screenX / cell_width);
+			return (int) (screenX / cellPrototype.width);
 		}
 
 		public int getCellY(float screenY) {
-			return (int) (screenY / cell_height);
+			return (int) (screenY / cellPrototype.height);
+		}
+
+		public int getCellWidth() {
+			return cellPrototype.width;
+		}
+
+		public void setCellWidth(int cellWidth) {
+			this.cellPrototype.width = cellWidth;
+		}
+
+		public int getCellHeight() {
+			return cellPrototype.height;
+		}
+
+		public void setCellHeight(int cellHeight) {
+			this.cellPrototype.height = cellHeight;
+		}
+
+		public int getCellCornerRadius() {
+			return cellPrototype.cornerRadius;
+		}
+
+		public void setCellCornerRadius(int cellCornerRadius) {
+			this.cellPrototype.cornerRadius = cellCornerRadius;
+		}
+
+		public int getSleepTime() {
+			return sleepTime;
+		}
+
+		public void setSleepTime(int sleepTime) {
+			this.sleepTime = sleepTime;
+		}
+
+		public boolean isSimulating() {
+			return isSimulating;
+		}
+
+		public void setSimulating(boolean isSimulating) {
+			this.isSimulating = isSimulating;
+		}
+
+		public void setSimulateTick(boolean simulateTick) {
+			this.simulateTick = simulateTick;
 		}
 
 		public void createLife(int x, int y) {
 
-			Random random = new Random();
+			// Random random = new Random();
 
-			if (x >= cells_x_size) {
+			if (x >= cells_x_count) {
 				return;
 			}
 
-			if (y >= cells_y_size) {
+			if (y >= cells_y_count) {
 				return;
 			}
 
-			// create left vertical column
-			if (x > 0) {
+			// // create left vertical column
+			// if (x > 0) {
+			//
+			// if (y > 0) {
+			// cells[cells_now][x - 1][y - 1] = random.nextInt(2);
+			// }
+			//
+			// cells[cells_now][x - 1][y] = random.nextInt(2);
+			//
+			// if (y < cells_y_count - 1) {
+			// cells[cells_now][x - 1][y + 1] = random.nextInt(2);
+			// }
+			// }
+			//
+			// // create center column
+			// if (y > 0) {
+			// cells[cells_now][x][y - 1] = random.nextInt(2);
+			// }
 
-				if (y > 0) {
-					cells[cells_now][x - 1][y - 1] = random.nextInt(2);
-				}
+			cells[cells_now].cells[x][y].color = Color.RED;// cellPrototype.color;
 
-				cells[cells_now][x - 1][y] = random.nextInt(2);
-
-				if (y < cells_y_size - 1) {
-					cells[cells_now][x - 1][y + 1] = random.nextInt(2);
-				}
-			}
-
-			// create center column
-			if (y > 0) {
-				cells[cells_now][x][y - 1] = random.nextInt(2);
-			}
-
-			cells[cells_now][x][y] = 1;
-
-			if (y < cells_y_size - 1) {
-				cells[cells_now][x][y + 1] = random.nextInt(2);
-			}
-
-			// count right vertical column
-			if (x < cells_x_size - 1) {
-				if (y > 0) {
-					cells[cells_now][x + 1][y - 1] = random.nextInt(2);
-				}
-
-				cells[cells_now][x + 1][y] = random.nextInt(2);
-
-				if (y < cells_y_size - 1) {
-					cells[cells_now][x + 1][y + 1] = random.nextInt(2);
-				}
-			}
+			// if (y < cells_y_count - 1) {
+			// cells[cells_now][x][y + 1] = random.nextInt(2);
+			// }
+			//
+			// // count right vertical column
+			// if (x < cells_x_count - 1) {
+			// if (y > 0) {
+			// cells[cells_now][x + 1][y - 1] = random.nextInt(2);
+			// }
+			//
+			// cells[cells_now][x + 1][y] = random.nextInt(2);
+			//
+			// if (y < cells_y_count - 1) {
+			// cells[cells_now][x + 1][y + 1] = random.nextInt(2);
+			// }
+			// }
 		}
 
 		private int getCellNeighborCount(int now, int next, int x, int y) {
@@ -167,115 +404,151 @@ public class AndyLife extends Activity {
 			if (x > 0) {
 
 				if (y > 0) {
-					neighbors = neighbors + cells[now][x - 1][y - 1];
+					if (cells[now].cells[x - 1][y - 1].isAlive()) {
+						neighbors = neighbors + 1;
+					}
 				}
 
-				neighbors = neighbors + cells[now][x - 1][y];
+				if (cells[now].cells[x - 1][y].isAlive()) {
+					neighbors = neighbors + 1;
+				}
 
-				if (y < cells_y_size - 1) {
-					neighbors = neighbors + cells[now][x - 1][y + 1];
+				if (y < cells_y_count - 1) {
+					if (cells[now].cells[x - 1][y + 1].isAlive()) {
+						neighbors = neighbors + 1;
+					}
 				}
 			}
 
 			// count center column
 			if (y > 0) {
-				neighbors = neighbors + cells[now][x][y - 1];
+				if (cells[now].cells[x][y - 1].isAlive()) {
+					neighbors = neighbors + 1;
+				}
 			}
 
-			if (y < cells_y_size - 1) {
-				neighbors = neighbors + cells[now][x][y + 1];
+			if (y < cells_y_count - 1) {
+				if (cells[now].cells[x][y + 1].isAlive()) {
+					neighbors = neighbors + 1;
+				}
 			}
 
 			// count right vertical column
-			if (x < cells_x_size - 1) {
+			if (x < cells_x_count - 1) {
 				if (y > 0) {
-					neighbors = neighbors + cells[now][x + 1][y - 1];
+					if (cells[now].cells[x + 1][y - 1].isAlive()) {
+						neighbors = neighbors + 1;
+					}
 				}
 
-				neighbors = neighbors + cells[now][x + 1][y];
+				if (cells[now].cells[x + 1][y].isAlive()) {
+					neighbors = neighbors + 1;
+				}
 
-				if (y < cells_y_size - 1) {
-					neighbors = neighbors + cells[now][x + 1][y + 1];
+				if (y < cells_y_count - 1) {
+					if (cells[now].cells[x + 1][y + 1].isAlive()) {
+						neighbors = neighbors + 1;
+					}
 				}
 			}
 
 			return neighbors;
 		}
 
-		// Any live cell with fewer than two live neighbors dies, as if caused
+		// 1) Any live cell with fewer than two live neighbors dies, as if
+		// caused
 		// by under-population.
-		// Any live cell with two or three live neighbors lives on to the next
+		// 2) Any live cell with two or three live neighbors lives on to the
+		// next
 		// generation.
-		// Any live cell with more than three live neighbors dies, as if by
+		// 3) Any live cell with more than three live neighbors dies, as if by
 		// overcrowding.
-		// Any dead cell with exactly three live neighbors becomes a live cell,
+		// 4) Any dead cell with exactly three live neighbors becomes a live
+		// cell,
 		// as if by reproduction.
 
 		private void simulateCell(int now, int next, int x, int y) {
 
-			int cell = cells[now][x][y];
+			Cell cell = cells[now].cells[x][y];
 
 			int neighbors = getCellNeighborCount(now, next, x, y);
-
-			if (cell > 0) {
+			if (cell.isAlive()) {
 				if ((neighbors < 2) || (neighbors > 3)) {
-					cell = 0;
+					cells[next].cells[x][y].kill();
+				} else {
+					cells[next].cells[x][y].color = cell.color;
 				}
 			} else {
 				if (neighbors == 3) {
-					cell = 1;
+					cells[next].cells[x][y].color = cellPrototype.color;
+				} else {
+					cells[next].cells[x][y].kill();
 				}
 			}
-
-			cells[next][x][y] = cell;
 		}
 
 		private void simulateTick() {
+
 			int now = this.cells_now;
 			int next = this.cells_next;
 
-			for (int x = 0; x < cells_x_size; x++) {
-				for (int y = 0; y < cells_y_size; y++) {
+			for (int x = 0; x < cells_x_count; x++) {
+				for (int y = 0; y < cells_y_count; y++) {
 
 					simulateCell(now, next, x, y);
 				}
 			}
 
+			// swap next and now indexes
 			this.cells_now = next;
 			this.cells_next = now;
 		}
 
-		void drawCells() {
+		void drawCell(Canvas canvas, int x, int y, RectF rect, Paint paint) {
+			int light_color = cellPrototype.color;
+			// int dark_color = (cellPrototype.color & 0xFF0000)
+			// | (cellPrototype.color & 0xFF00)
+			// | (cellPrototype.color & 0xFF);
 
-			Paint paint = new Paint();
+			int dark_color = Color.MAGENTA;
 
-			RectF rect = new RectF(0, 0, cell_width, cell_height);
+			if (cells[cells_now].cells[x][y].isAlive()) {
+				paint.setShader(new LinearGradient(0, 0, 0,
+						cellPrototype.height, light_color, dark_color,
+						Shader.TileMode.REPEAT));
+				paint.setARGB(0xFF, 0, 0xFF, 0);
+				canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
+						cellPrototype.cornerRadius, paint);
+			} else {
+				paint.setShader(null);
+				paint.setColor(Color.BLACK);
+				canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
+						cellPrototype.cornerRadius, paint);
+			}
+		}
+
+		void drawCells(RectF rect, Paint paint) {
 
 			Canvas canvas = holder.lockCanvas();
 
-			for (int x = 0; x < cells_x_size; x++) {
-				for (int y = 0; y < cells_y_size; y++) {
-
-					rect.offsetTo(x * cell_width, y * cell_height);
-
-					if (cells[cells_now][x][y] > 0) {
-						paint.setShader(new LinearGradient(0, 0, 0,
-								cell_height, Color.GREEN, Color.rgb(0x0, 0xAA,
-										0x0), Shader.TileMode.REPEAT));
-						paint.setARGB(0xFF, 0, 0xFF, 0);
-						canvas.drawRoundRect(rect, cell_corner_radius,
-								cell_corner_radius, paint);
-					} else {
-						paint.setShader(null);
-						paint.setARGB(0xFF, 0, 0, 0);
-						canvas.drawRoundRect(rect, cell_corner_radius,
-								cell_corner_radius, paint);
-					}
-
+			for (int x = 0; x < cells_x_count; x++) {
+				for (int y = 0; y < cells_y_count; y++) {
+					rect.offsetTo(x * cellPrototype.width, y
+							* cellPrototype.height);
+					drawCell(canvas, x, y, rect, paint);
 				}
 			}
 
 			holder.unlockCanvasAndPost(canvas);
+			frameCounter.update();
+		}
+
+		public void init() {
+			this.cells = null;
+			this.cells = new CellArray[2];
+			for (int i = 0; i < 2; i++) {
+				cells[i] = new CellArray(cells_x_count, cells_y_count);
+			}
 		}
 
 		public void run() {
@@ -289,24 +562,39 @@ public class AndyLife extends Activity {
 
 			// calculate number of cells
 			Canvas canvas = holder.lockCanvas();
-			cells_x_size = canvas.getWidth() / cell_width;
-			cells_y_size = canvas.getHeight() / cell_height;
+			
+			Log.i("CanvasSize", canvas.getWidth() + " " + canvas.getHeight());
+			
+			cells_x_count = canvas.getWidth() / cellPrototype.width;
+			cells_y_count = canvas.getHeight() / cellPrototype.height;
 			holder.unlockCanvasAndPost(canvas);
 
 			if (cells == null) {
-				cells = new int[2][cells_x_size][cells_y_size];
+				init();
 			}
+
+			Paint paint = new Paint();
+			RectF rect = new RectF(0, 0, cellPrototype.width,
+					cellPrototype.height);
 
 			while (isRunning) {
 				if (!holder.getSurface().isValid()) {
 					continue;
 				}
 
-				simulateTick();
-				drawCells();
+				if (isSimulating) {
+					simulateTick = true;
+				}
+
+				if (simulateTick) {
+					simulateTick();
+					simulateTick = false;
+				}
+
+				drawCells(rect, paint);
 
 				try {
-					Thread.sleep(sleep_time);
+					Thread.sleep(sleepTime);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -336,5 +624,5 @@ public class AndyLife extends Activity {
 			thread.start();
 		}
 	}
-	
+
 }

@@ -3,5 +3,10 @@
     <string name="app_name">Andy Life</string>
     <string name="menu_settings">Settings</string>
     <string name="title_activity_andy_life">Andy Life</string>
+    <string name="Preferences">Preferences</string>
+    <string name="Start">Start</string>
+    <string name="Stop">Stop</string>
+    <string name="Reset">Reset</string>
+    <string name="Next">Next</string>
 
 </resources>
