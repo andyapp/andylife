@@ -104,8 +104,8 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		
-		this.resetLifeView();		
+
+		this.resetLifeView();
 		lifeView.resume();
 	}
 
@@ -162,14 +162,12 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		return true;
 	}
 
-	
-	
 	private void resetLifeView() {
 		lifeView.pause();
 		lifeView.cells = null;
-		setPreferences();		
+		setPreferences();
 	}
-	
+
 	private void setPreferences() {
 		if (this.lifeView == null) {
 			return;
@@ -178,6 +176,9 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		// get data from settings activity in this case the language
 		SharedPreferences preferences = PreferenceManager
 				.getDefaultSharedPreferences(this);
+
+		boolean show_stats = preferences.getBoolean("show_stats", true);
+		lifeView.setShowStats(show_stats);
 
 		String cell_size_str = preferences.getString("cell_size", "");
 		Log.d("cell_size_str", cell_size_str);
@@ -193,6 +194,23 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		lifeView.setCellHeight(cell_size);
 		lifeView.setCellCornerRadius(preferences.getInt("cellCornerRadius", 5));
 		lifeView.setSleepTime(preferences.getInt("sleepTime", 0));
+
+		int color = Color.GREEN;
+
+		String color_str = preferences.getString("cell_color", "");
+		color_str = color_str.toUpperCase();
+
+		if (color_str.equals("GREEN")) {
+			color = Color.GREEN;
+		} else if (color_str.equals("RED")) {
+			color = Color.RED;
+		} else if (color_str.equals("BLUE")) {
+			color = Color.BLUE;
+		} else if (color_str.equals("YELLOW")) {
+			color = Color.YELLOW;
+		}
+
+		lifeView.cellPrototype.color = color;
 	}
 
 	public class CellPrototype {
@@ -245,6 +263,20 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		}
 	}
 
+	public class CellSeeder {
+		/* Current number of seeds */
+		int seedCount = 0;
+
+		/* Maximum number of seeds */
+		int seedMaxCount = 9;
+
+		/* Number of ticks required to spawn a single seed */
+		int seedSpawnRate = 1;
+
+		/* Number of ticks until next seed is spawned */
+		int seedSpawnTicks = 0;
+	}
+
 	public class FrameCounter {
 		private int samplesCollected = 0;
 		private int sampleTime = 0;
@@ -286,13 +318,16 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		boolean isRunning = false;
 		boolean isSimulating = false;
 		boolean simulateTick = false;
+		boolean showStats = false;
 
+		CellSeeder cellSeeder;
 		CellPrototype cellPrototype;
 		CellArray cells[];
 		int cells_now = 0;
 		int cells_next = 1;
 		int cells_x_count = 2;
 		int cells_y_count = 2;
+		int cells_alive_count = 0;
 		int cell_gap = 1;
 
 		int sleepTime = 0;
@@ -310,14 +345,15 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			cellPrototype.height = 40;
 			cellPrototype.width = 40;
 
+			cellSeeder = new CellSeeder();
 		}
 
 		public int getCellX(float screenX) {
-			return (int) (screenX / cellPrototype.width);
+			return (int) (screenX / (cellPrototype.width + this.cell_gap));
 		}
 
 		public int getCellY(float screenY) {
-			return (int) (screenY / cellPrototype.height);
+			return (int) (screenY / (cellPrototype.height + this.cell_gap));
 		}
 
 		public int getCellWidth() {
@@ -352,6 +388,14 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			this.sleepTime = sleepTime;
 		}
 
+		public boolean isShowStats() {
+			return showStats;
+		}
+
+		public void setShowStats(boolean showStats) {
+			this.showStats = showStats;
+		}
+
 		public boolean isSimulating() {
 			return isSimulating;
 		}
@@ -365,6 +409,10 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		}
 
 		public void createLife(int x, int y) {
+
+			if (cellSeeder.seedCount == 0) {
+				return;
+			}
 
 			// Random random = new Random();
 
@@ -395,7 +443,10 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			// cells[cells_now][x][y - 1] = random.nextInt(2);
 			// }
 
-			cells[cells_now].cells[x][y].color = Color.RED;// cellPrototype.color;
+			if (!cells[cells_now].cells[x][y].isAlive()) {
+				cellSeeder.seedCount -= 1;
+				cells[cells_now].cells[x][y].color = cellPrototype.color;
+			}
 
 			// if (y < cells_y_count - 1) {
 			// cells[cells_now][x][y + 1] = random.nextInt(2);
@@ -507,13 +558,17 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 
 		private void simulateTick() {
 
+			this.cells_alive_count = 0;
 			int now = this.cells_now;
 			int next = this.cells_next;
 
 			for (int x = 0; x < cells_x_count; x++) {
 				for (int y = 0; y < cells_y_count; y++) {
-
 					simulateCell(now, next, x, y);
+
+					if (cells[next].cells[x][y].isAlive()) {
+						this.cells_alive_count += 1;
+					}
 				}
 			}
 
@@ -522,26 +577,33 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			this.cells_next = now;
 		}
 
-		void drawCell(Canvas canvas, int x, int y, RectF rect, Paint paint) {
+		void drawDeadCell(Canvas canvas, int x, int y, RectF rect, Paint paint) {
+			paint.setShader(null);
+			paint.setColor(Color.BLACK);
+			canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
+					cellPrototype.cornerRadius, paint);
+		}
+
+		void drawLiveCell(Canvas canvas, int x, int y, RectF rect, Paint paint) {
 			int light_color = cellPrototype.color;
-			// int dark_color = (cellPrototype.color & 0xFF0000)
-			// | (cellPrototype.color & 0xFF00)
-			// | (cellPrototype.color & 0xFF);
 
-			int dark_color = Color.MAGENTA;
+			float[] hsv = new float[3];
+			Color.colorToHSV(cellPrototype.color, hsv);
+			hsv[2] *= 0.8f; // value component
+			int dark_color = Color.HSVToColor(hsv);
 
+			paint.setShader(new LinearGradient(0, 0, 0, cellPrototype.height
+					+ cell_gap, light_color, dark_color, Shader.TileMode.REPEAT));
+			paint.setARGB(0xFF, 0, 0xFF, 0);
+			canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
+					cellPrototype.cornerRadius, paint);
+		}
+
+		void drawCell(Canvas canvas, int x, int y, RectF rect, Paint paint) {
 			if (cells[cells_now].cells[x][y].isAlive()) {
-				paint.setShader(new LinearGradient(0, 0, 0,
-						cellPrototype.height + cell_gap, light_color, dark_color,
-						Shader.TileMode.REPEAT));
-				paint.setARGB(0xFF, 0, 0xFF, 0);
-				canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
-						cellPrototype.cornerRadius, paint);
+				drawLiveCell(canvas, x, y, rect, paint);
 			} else {
-				paint.setShader(null);
-				paint.setColor(Color.BLACK);
-				canvas.drawRoundRect(rect, cellPrototype.cornerRadius,
-						cellPrototype.cornerRadius, paint);
+				drawDeadCell(canvas, x, y, rect, paint);
 			}
 		}
 
@@ -549,7 +611,7 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			Paint paint = new Paint();
 			RectF rect = new RectF(0, 0, cellPrototype.width,
 					cellPrototype.height);
-			
+
 			for (int x = 0; x < cells_x_count; x++) {
 				for (int y = 0; y < cells_y_count; y++) {
 					rect.offsetTo(x * (cellPrototype.width + cell_gap), y
@@ -565,20 +627,38 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 
 			paint.setColor(Color.WHITE);
 			paint.setTextSize(18);
-			
+
 			String text;
 			int text_top = 25;
-			
+
 			if (isSimulating) {
 				text = "Simulation Running";
 			} else {
-			  text = "Simulation Stopped";
+				text = "Simulation Stopped";
 			}
 			canvas.drawText(text, 10, text_top, paint);
 			text_top += 25;
-			
-			canvas.drawText("FPS: " + frameCounter.getFps(), 10, text_top, paint);
+
+			canvas.drawText("Grid: " + this.cells_x_count + "x"
+					+ this.cells_y_count, 10, text_top, paint);
 			text_top += 25;
+
+			canvas.drawText("Total cells: " + this.cells_x_count
+					* this.cells_y_count, 10, text_top, paint);
+			text_top += 25;
+
+			canvas.drawText("Live cells: " + cells_alive_count, 10, text_top,
+					paint);
+			text_top += 25;
+
+			canvas.drawText("Seeds: " + cellSeeder.seedCount, 10, text_top,
+					paint);
+			text_top += 25;
+
+			canvas.drawText("FPS: " + frameCounter.getFps(), 10, text_top,
+					paint);
+			text_top += 25;
+
 		}
 
 		void draw() {
@@ -586,7 +666,10 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 
 			canvas.drawColor(Color.DKGRAY);
 			drawCells(canvas);
-			drawStatusText(canvas);
+
+			if (this.showStats) {
+				drawStatusText(canvas);
+			}
 
 			holder.unlockCanvasAndPost(canvas);
 			frameCounter.update();
@@ -601,23 +684,25 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 		}
 
 		public void run() {
-			
+
 			if (holder == null) {
 				holder = getHolder();
 			}
 
 			while (!holder.getSurface().isValid()) {
-			}			
-			
+			}
+
 			// calculate number of cells
 			Canvas canvas = holder.lockCanvas();
 
 			Log.i("CanvasSize", canvas.getWidth() + " " + canvas.getHeight());
 
-			cells_x_count = canvas.getWidth() / (cellPrototype.width + cell_gap);
-			cells_y_count = canvas.getHeight() / (cellPrototype.height + cell_gap);
-			holder.unlockCanvasAndPost(canvas);		
-			
+			cells_x_count = canvas.getWidth()
+					/ (cellPrototype.width + cell_gap);
+			cells_y_count = canvas.getHeight()
+					/ (cellPrototype.height + cell_gap);
+			holder.unlockCanvasAndPost(canvas);
+
 			if (cells == null) {
 				init();
 			}
@@ -625,6 +710,17 @@ public class AndyLife extends Activity implements OnLayoutChangeListener {
 			while (isRunning) {
 				if (!holder.getSurface().isValid()) {
 					continue;
+				}
+
+				if (cellSeeder.seedSpawnTicks == 0) {
+					cellSeeder.seedSpawnTicks += cellSeeder.seedSpawnRate;
+					if (cellSeeder.seedCount < cellSeeder.seedMaxCount) {
+						cellSeeder.seedCount += 1;
+					}
+				} else {
+					if (cellSeeder.seedSpawnTicks > 0) {
+						cellSeeder.seedSpawnTicks -= 1;
+					}
 				}
 
 				if (isSimulating) {

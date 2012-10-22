@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
-    <EditTextPreference 
+    
+    <CheckBoxPreference
+        android:title="Show Statistics"
+        android:key="show_stats" />
+    
+        <EditTextPreference 
         android:title="Cell Size"
         android:key="cell_size"/>
+    
+    <EditTextPreference 
+        android:title="Cell Color"
+        android:key="cell_color"/>
 
 </PreferenceScreen>

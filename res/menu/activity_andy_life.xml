@@ -1,10 +1,28 @@
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/menuItemStart" android:title="@string/Start" android:showAsAction="ifRoom"></item><item android:id="@+id/menuItemStop" android:title="@string/Stop" android:showAsAction="ifRoom"></item><item android:id="@+id/menuItemReset" android:title="@string/Reset"></item><item android:id="@+id/menu_preferences"
-        android:title="@string/Preferences"
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <item
+        android:id="@+id/menuItemStart"
+        android:showAsAction="ifRoom"
+        android:title="@string/Start">
+    </item>
+    <item
+        android:id="@+id/menuItemStop"
+        android:showAsAction="ifRoom"
+        android:title="@string/Stop">
+    </item>
+    <item
+        android:id="@+id/menuItemReset"
+        android:title="@string/Reset">
+    </item>
+    <item
+        android:id="@+id/menu_preferences"
         android:orderInCategory="100"
-        android:showAsAction="never" />
-    
-    <item android:id="@+id/menuItemNext" android:showAsAction="ifRoom" android:title="@string/Next"></item>
-    
-    
+        android:showAsAction="never"
+        android:title="@string/Preferences"/>
+    <item
+        android:id="@+id/menuItemNext"
+        android:showAsAction="ifRoom"
+        android:title="@string/Next">
+    </item>
+
 </menu>
